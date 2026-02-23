@@ -3,7 +3,6 @@ import { getDb, initDatabase } from '@/lib/db';
 
 export async function GET() {
   try {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
     await initDatabase();
     const db = getDb();
 
@@ -30,7 +29,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
     await initDatabase();
     const db = getDb();
     const body = await request.json();

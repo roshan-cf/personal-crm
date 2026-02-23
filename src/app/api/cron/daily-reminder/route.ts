@@ -13,7 +13,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
     await initDatabase();
     const db = getDb();
 
