@@ -42,6 +42,7 @@ export async function GET() {
 
       return {
         ...contact,
+        frequency_day: contact.frequency_day ?? null,
         last_interaction: lastInteraction,
         days_since_interaction: daysSinceInteraction,
         is_due: isDue,
@@ -61,15 +62,15 @@ export async function POST(request: Request) {
     const db = getDb();
     const body = await request.json();
 
-    const { name, relation, remarks, frequency, category } = body;
+    const { name, relation, remarks, frequency, frequency_day, category } = body;
 
     if (!name || !relation) {
       return NextResponse.json({ error: 'Name and relation are required' }, { status: 400 });
     }
 
     const result = await db.execute({
-      sql: `INSERT INTO contacts (name, relation, remarks, frequency, category) VALUES (?, ?, ?, ?, ?)`,
-      args: [name, relation, remarks || null, frequency || 'weekly', category || 'friends'],
+      sql: `INSERT INTO contacts (name, relation, remarks, frequency, frequency_day, category) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [name, relation, remarks || null, frequency || 'weekly', frequency_day ?? null, category || 'friends'],
     });
 
     const contactId = Number(result.lastInsertRowid);

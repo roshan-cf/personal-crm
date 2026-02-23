@@ -36,15 +36,15 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const { name, relation, remarks, frequency, category } = body;
+    const { name, relation, remarks, frequency, frequency_day, category } = body;
 
     if (!name || !relation) {
       return NextResponse.json({ error: 'Name and relation are required' }, { status: 400 });
     }
 
     await db.execute({
-      sql: `UPDATE contacts SET name = ?, relation = ?, remarks = ?, frequency = ?, category = ?, updated_at = datetime('now') WHERE id = ?`,
-      args: [name, relation, remarks || null, frequency || 'weekly', category || 'friends', Number(id)],
+      sql: `UPDATE contacts SET name = ?, relation = ?, remarks = ?, frequency = ?, frequency_day = ?, category = ?, updated_at = datetime('now') WHERE id = ?`,
+      args: [name, relation, remarks || null, frequency || 'weekly', frequency_day ?? null, category || 'friends', Number(id)],
     });
 
     const updatedContact = await db.execute({

@@ -8,6 +8,7 @@ export interface Contact {
   relation: string;
   remarks: string | null;
   frequency: Frequency;
+  frequency_day: number | null;
   category: Category;
   created_at: string;
   updated_at: string;

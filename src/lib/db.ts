@@ -29,6 +29,7 @@ export async function initDatabase(): Promise<void> {
       relation TEXT NOT NULL,
       remarks TEXT,
       frequency TEXT NOT NULL DEFAULT 'weekly',
+      frequency_day INTEGER,
       category TEXT NOT NULL DEFAULT 'friends',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -44,4 +45,10 @@ export async function initDatabase(): Promise<void> {
       FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
     )
   `);
+
+  try {
+    await db.execute(`ALTER TABLE contacts ADD COLUMN frequency_day INTEGER`);
+  } catch {
+    // Column already exists
+  }
 }
