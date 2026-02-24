@@ -3,26 +3,25 @@ import { NextResponse } from 'next/server';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
-function getAppUrl() {
-  // Prefer explicit APP_URL env var
+function getAppUrl(request: Request): string {
+  // Priority 1: Explicit env var (for production)
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL;
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
   }
-  // Fallback for Vercel
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  // Local development
-  return 'http://localhost:3001';
+  // Priority 2: Use the request origin (works for preview deployments)
+  const requestUrl = new URL(request.url);
+  return requestUrl.origin;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    return NextResponse.redirect(new URL('/settings?error=google_not_configured', getAppUrl()));
+    return NextResponse.redirect(new URL('/settings?error=google_not_configured', getAppUrl(request)));
   }
 
-  const appUrl = getAppUrl();
+  const appUrl = getAppUrl(request);
   const redirectUri = `${appUrl}/api/auth/google/callback`;
+  
+  console.log('[Google OAuth] Using redirect_uri:', redirectUri);
   
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
