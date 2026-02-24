@@ -1,19 +1,27 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { getDb, initDatabase } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const APP_URL = process.env.VERCEL_URL 
-  ? `https://${process.env.VERCEL_URL}` 
-  : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+
+function getAppUrl() {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return 'http://localhost:3001';
+}
 
 export async function GET(request: Request) {
+  const appUrl = getAppUrl();
+  
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.redirect(new URL('/login', APP_URL));
+      return NextResponse.redirect(new URL('/login', appUrl));
     }
 
     const { searchParams } = new URL(request.url);
@@ -21,10 +29,10 @@ export async function GET(request: Request) {
     const error = searchParams.get('error');
 
     if (error || !code) {
-      return NextResponse.redirect(new URL('/settings?error=google_auth_failed', APP_URL));
+      return NextResponse.redirect(new URL('/settings?error=google_auth_failed', appUrl));
     }
 
-    const redirectUri = `${APP_URL}/api/auth/google/callback`;
+    const redirectUri = `${appUrl}/api/auth/google/callback`;
 
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -41,14 +49,14 @@ export async function GET(request: Request) {
 
     if (!tokenResponse.ok) {
       console.error('Token exchange failed:', await tokenResponse.text());
-      return NextResponse.redirect(new URL('/settings?error=token_exchange_failed', APP_URL));
+      return NextResponse.redirect(new URL('/settings?error=token_exchange_failed', appUrl));
     }
 
     const tokens = await tokenResponse.json();
     const refreshToken = tokens.refresh_token;
 
     if (!refreshToken) {
-      return NextResponse.redirect(new URL('/settings?error=no_refresh_token', APP_URL));
+      return NextResponse.redirect(new URL('/settings?error=no_refresh_token', appUrl));
     }
 
     // Save refresh token to database
@@ -73,9 +81,9 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.redirect(new URL('/settings?google=connected', APP_URL));
+    return NextResponse.redirect(new URL('/settings?google=connected', appUrl));
   } catch (error) {
     console.error('Google OAuth callback error:', error);
-    return NextResponse.redirect(new URL('/settings?error=unknown', APP_URL));
+    return NextResponse.redirect(new URL('/settings?error=unknown', appUrl));
   }
 }
