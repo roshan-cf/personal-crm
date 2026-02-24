@@ -12,6 +12,7 @@ export default function Nav() {
   const links = [
     { href: '/', label: 'Dashboard' },
     { href: '/contacts', label: 'Contacts' },
+    { href: '/settings', label: 'Settings' },
   ];
 
   const isAuthPage = pathname === '/login';
