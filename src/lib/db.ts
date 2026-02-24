@@ -103,4 +103,14 @@ export async function initDatabase(): Promise<void> {
   } catch {
     // Ignore errors
   }
+
+  // Create indexes for performance
+  try {
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_interactions_contact_id ON interactions(contact_id)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`);
+    await db.execute(`CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes(email)`);
+  } catch {
+    // Index already exists
+  }
 }
