@@ -15,6 +15,7 @@ export interface Contact {
   name: string;
   relation: string;
   remarks: string | null;
+  phone: string | null;
   frequency: Frequency;
   frequency_day: number | null;
   category: Category;

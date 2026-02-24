@@ -17,6 +17,7 @@ export default function EditContactPage() {
     name: '',
     relation: '',
     remarks: '',
+    phone: '',
     frequency: 'weekly' as Frequency,
     frequency_day: null as number | null,
     category: 'friends' as Category,
@@ -36,6 +37,7 @@ export default function EditContactPage() {
           name: data.name,
           relation: data.relation,
           remarks: data.remarks || '',
+          phone: data.phone || '',
           frequency: data.frequency,
           frequency_day: data.frequency_day,
           category: data.category,
@@ -152,6 +154,20 @@ export default function EditContactPage() {
                 onChange={(e) => setForm((prev) => ({ ...prev, relation: e.target.value }))}
                 required
                 placeholder="e.g., College friend, Manager, Uncle"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2">
+                Phone (for WhatsApp)
+              </label>
+              <input
+                type="tel"
+                id="phone"
+                value={form.phone}
+                onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="+91 9876543210"
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
               />
             </div>

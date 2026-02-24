@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
 import { sendDailyReminder } from '@/lib/email';
 import { createCalendarEventsForDueContacts } from '@/lib/calendar';
+import { sendBulkWhatsAppMessages } from '@/lib/whatsapp';
 import type { Contact, ContactWithLastInteraction, User, UserSettings } from '@/types';
 
 export async function GET(request: Request) {
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
 
     let totalEmailsSent = 0;
     let totalCalendarEvents = 0;
+    let totalWhatsAppSent = 0;
     let totalDueContacts = 0;
 
     for (const userRow of usersResult.rows) {
@@ -98,6 +100,18 @@ export async function GET(request: Request) {
         const result = await createCalendarEventsForDueContacts(user.id, contactNames);
         totalCalendarEvents += result.success;
       }
+
+      // Send WhatsApp notifications
+      if (user.whatsapp_enabled) {
+        const contactsWithPhone = dueContacts
+          .filter(c => c.phone)
+          .map(c => ({ name: c.name, phone: c.phone! }));
+        
+        if (contactsWithPhone.length > 0) {
+          const result = await sendBulkWhatsAppMessages(contactsWithPhone);
+          totalWhatsAppSent += result.sent;
+        }
+      }
     }
 
     return NextResponse.json({ 
@@ -106,6 +120,7 @@ export async function GET(request: Request) {
       totalDueContacts,
       emailsSent: totalEmailsSent,
       calendarEventsCreated: totalCalendarEvents,
+      whatsappSent: totalWhatsAppSent,
     });
   } catch (error) {
     console.error('Error in cron job:', error);

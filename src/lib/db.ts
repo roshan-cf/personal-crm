@@ -113,4 +113,11 @@ export async function initDatabase(): Promise<void> {
   } catch {
     // Index already exists
   }
+
+  // Add phone column to contacts
+  try {
+    await db.execute(`ALTER TABLE contacts ADD COLUMN phone TEXT`);
+  } catch {
+    // Column already exists
+  }
 }

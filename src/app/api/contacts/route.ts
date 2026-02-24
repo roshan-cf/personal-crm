@@ -77,15 +77,15 @@ export async function POST(request: Request) {
     const db = getDb();
     const body = await request.json();
 
-    const { name, relation, remarks, frequency, frequency_day, category } = body;
+    const { name, relation, remarks, phone, frequency, frequency_day, category } = body;
 
     if (!name || !relation) {
       return NextResponse.json({ error: 'Name and relation are required' }, { status: 400 });
     }
 
     const result = await db.execute({
-      sql: `INSERT INTO contacts (user_id, name, relation, remarks, frequency, frequency_day, category) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [user.id, name, relation, remarks || null, frequency || 'weekly', frequency_day ?? null, category || 'friends'],
+      sql: `INSERT INTO contacts (user_id, name, relation, remarks, phone, frequency, frequency_day, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [user.id, name, relation, remarks || null, phone || null, frequency || 'weekly', frequency_day ?? null, category || 'friends'],
     });
 
     const contactId = Number(result.lastInsertRowid);
