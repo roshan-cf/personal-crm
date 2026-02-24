@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -17,29 +17,38 @@ export async function GET(request: Request) {
   const appUrl = getAppUrl(request);
   
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', appUrl));
-    }
-
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const error = searchParams.get('error');
+    const stateParam = searchParams.get('state');
 
     if (error) {
       console.error('[Google OAuth] Error from Google:', error);
       return NextResponse.redirect(new URL(`/settings?error=${error}`, appUrl));
     }
 
-    if (!code) {
-      return NextResponse.redirect(new URL('/settings?error=no_code', appUrl));
+    if (!code || !stateParam) {
+      return NextResponse.redirect(new URL('/settings?error=invalid_callback', appUrl));
     }
+
+    let state: { sessionToken: string; redirectUri: string };
+    try {
+      state = JSON.parse(Buffer.from(stateParam, 'base64').toString());
+    } catch {
+      return NextResponse.redirect(new URL('/settings?error=invalid_state', appUrl));
+    }
+
+    const session = await getSession(state.sessionToken);
+    if (!session) {
+      return NextResponse.redirect(new URL('/login?error=session_expired', appUrl));
+    }
+
+    const user = session.user;
 
     const redirectUri = `${appUrl}/api/auth/google/callback`;
     
     console.log('[Google OAuth] Exchanging code with redirect_uri:', redirectUri);
 
-    // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -66,7 +75,6 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL('/settings?error=no_refresh_token', appUrl));
     }
 
-    // Save refresh token to database
     await initDatabase();
     const db = getDb();
 
