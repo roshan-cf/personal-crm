@@ -1,7 +1,15 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import type { ContactWithLastInteraction } from '@/types';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getGmailTransporter() {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  });
+}
 
 export async function sendOtpEmail(
   email: string,
@@ -42,13 +50,16 @@ export async function sendOtpEmail(
   `;
 
   try {
-    await resend.emails.send({
-      from: 'Personal CRM <onboarding@resend.dev>',
+    const transporter = getGmailTransporter();
+    
+    await transporter.sendMail({
+      from: `"Personal CRM" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: `Your verification code: ${otpCode}`,
       html,
     });
     
+    console.log('OTP email sent successfully to:', email);
     return { success: true };
   } catch (error) {
     console.error('Error sending OTP email:', error);
@@ -62,7 +73,7 @@ export async function sendOtpEmail(
 export async function sendDailyReminder(
   email: string,
   dueContacts: ContactWithLastInteraction[]
-): Promise<{ success: boolean; error?: string; id?: string }> {
+): Promise<{ success: boolean; error?: string }> {
   if (!dueContacts.length) {
     return { success: true };
   }
@@ -117,15 +128,17 @@ export async function sendDailyReminder(
   `;
 
   try {
-    const response = await resend.emails.send({
-      from: 'Personal CRM <onboarding@resend.dev>',
+    const transporter = getGmailTransporter();
+    
+    await transporter.sendMail({
+      from: `"Personal CRM" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: `${dueContacts.length} contact${dueContacts.length !== 1 ? 's' : ''} to reach out to today`,
       html,
     });
     
-    console.log('Email sent successfully:', response);
-    return { success: true, id: response.data?.id };
+    console.log('Daily reminder sent successfully to:', email);
+    return { success: true };
   } catch (error) {
     console.error('Error sending email:', error);
     return { 
