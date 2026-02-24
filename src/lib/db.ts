@@ -55,36 +55,6 @@ export async function initDatabase(): Promise<void> {
     )
   `);
 
-  // Contacts table (with user_id)
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS contacts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      relation TEXT NOT NULL,
-      remarks TEXT,
-      frequency TEXT NOT NULL DEFAULT 'weekly',
-      frequency_day INTEGER,
-      category TEXT NOT NULL DEFAULT 'friends',
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `);
-
-  // Interactions table (with user_id)
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS interactions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      contact_id INTEGER NOT NULL,
-      interacted_at TEXT DEFAULT (datetime('now')),
-      notes TEXT,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE
-    )
-  `);
-
   // User settings table
   await db.execute(`
     CREATE TABLE IF NOT EXISTS user_settings (
@@ -97,4 +67,25 @@ export async function initDatabase(): Promise<void> {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  // Migrations: Add user_id to existing tables if they don't have it
+  try {
+    await db.execute(`ALTER TABLE contacts ADD COLUMN user_id TEXT`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    await db.execute(`ALTER TABLE interactions ADD COLUMN user_id TEXT`);
+  } catch {
+    // Column already exists
+  }
+
+  // Delete old data that doesn't have user_id (cleanup)
+  try {
+    await db.execute(`DELETE FROM contacts WHERE user_id IS NULL`);
+    await db.execute(`DELETE FROM interactions WHERE user_id IS NULL`);
+  } catch {
+    // Ignore errors
+  }
 }
