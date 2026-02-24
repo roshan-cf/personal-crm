@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refresh } = useAuth();
   const [step, setStep] = useState<'email' | 'otp'>('email');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -55,8 +57,11 @@ export default function LoginPage() {
         throw new Error(data.error || 'Invalid code');
       }
 
+      // Refresh auth state immediately
+      await refresh();
+      
+      // Then navigate
       router.push('/');
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -64,34 +69,28 @@ export default function LoginPage() {
     }
   };
 
-  const handleBack = () => {
-    setStep('email');
-    setOtp('');
-    setError(null);
-  };
-
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-slate-200 dark:border-zinc-800 p-8">
+    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-8">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white mb-1">
           Personal CRM
         </h1>
-        <p className="text-slate-500 dark:text-zinc-400">
-          {step === 'email' ? 'Sign in to manage your relationships' : 'Enter the code sent to your email'}
+        <p className="text-sm text-zinc-500">
+          {step === 'email' ? 'Sign in to continue' : 'Enter the code sent to your email'}
         </p>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">
           {error}
         </div>
       )}
 
       {step === 'email' ? (
-        <form onSubmit={handleSendOtp} className="space-y-6">
+        <form onSubmit={handleSendOtp} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2">
-              Email address
+            <label htmlFor="email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+              Email
             </label>
             <input
               type="email"
@@ -101,22 +100,22 @@ export default function LoginPage() {
               required
               autoFocus
               placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+              className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-shadow"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading || !email}
-            className="w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-violet-500/25"
+            className="w-full py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg font-medium hover:bg-zinc-800 dark:hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Sending...' : 'Send Code'}
+            {loading ? 'Sending...' : 'Continue'}
           </button>
         </form>
       ) : (
-        <form onSubmit={handleVerifyOtp} className="space-y-6">
+        <form onSubmit={handleVerifyOtp} className="space-y-4">
           <div>
-            <label htmlFor="otp" className="block text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2">
+            <label htmlFor="otp" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
               Verification code
             </label>
             <input
@@ -127,25 +126,25 @@ export default function LoginPage() {
               required
               autoFocus
               placeholder="000000"
-              className="w-full px-4 py-4 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all text-center text-2xl tracking-[0.5em] font-mono"
+              className="w-full px-3 py-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-shadow text-center text-xl tracking-[0.4em] font-mono"
             />
-            <p className="text-xs text-slate-400 dark:text-zinc-500 mt-2 text-center">
-              Code sent to {email}
+            <p className="text-xs text-zinc-400 mt-1.5 text-center">
+              Sent to {email}
             </p>
           </div>
 
           <button
             type="submit"
             disabled={loading || otp.length !== 6}
-            className="w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-violet-500/25"
+            className="w-full py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg font-medium hover:bg-zinc-800 dark:hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? 'Verifying...' : 'Sign In'}
           </button>
 
           <button
             type="button"
-            onClick={handleBack}
-            className="w-full py-2 text-slate-500 dark:text-zinc-400 hover:text-violet-600 dark:hover:text-violet-400 text-sm transition-colors"
+            onClick={() => { setStep('email'); setOtp(''); setError(null); }}
+            className="w-full py-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 text-sm transition-colors"
           >
             ← Use a different email
           </button>
