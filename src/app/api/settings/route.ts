@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 
 export async function GET() {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await initDatabase();
     const db = getDb();
 
-    const result = await db.execute(`
-      SELECT * FROM settings WHERE id = 1
-    `);
+    const result = await db.execute({
+      sql: `SELECT * FROM user_settings WHERE user_id = ?`,
+      args: [user.id],
+    });
 
     if (result.rows.length === 0) {
       return NextResponse.json({
-        email_enabled: false,
-        notification_email: '',
+        email_enabled: true,
+        notification_email: user.email,
         calendar_enabled: false,
         whatsapp_enabled: false,
         whatsapp_number: '',
@@ -29,6 +36,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await initDatabase();
     const db = getDb();
     const body = await request.json();
@@ -41,25 +53,18 @@ export async function POST(request: Request) {
       whatsapp_number,
     } = body;
 
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS settings (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        email_enabled INTEGER DEFAULT 0,
-        notification_email TEXT DEFAULT '',
-        calendar_enabled INTEGER DEFAULT 0,
-        whatsapp_enabled INTEGER DEFAULT 0,
-        whatsapp_number TEXT DEFAULT ''
-      )
-    `);
-
-    const existing = await db.execute(`SELECT id FROM settings WHERE id = 1`);
+    const existing = await db.execute({
+      sql: `SELECT user_id FROM user_settings WHERE user_id = ?`,
+      args: [user.id],
+    });
 
     if (existing.rows.length === 0) {
       await db.execute({
-        sql: `INSERT INTO settings (id, email_enabled, notification_email, calendar_enabled, whatsapp_enabled, whatsapp_number) VALUES (1, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO user_settings (user_id, email_enabled, notification_email, calendar_enabled, whatsapp_enabled, whatsapp_number) VALUES (?, ?, ?, ?, ?, ?)`,
         args: [
+          user.id,
           email_enabled ? 1 : 0,
-          notification_email || '',
+          notification_email || user.email,
           calendar_enabled ? 1 : 0,
           whatsapp_enabled ? 1 : 0,
           whatsapp_number || '',
@@ -67,13 +72,14 @@ export async function POST(request: Request) {
       });
     } else {
       await db.execute({
-        sql: `UPDATE settings SET email_enabled = ?, notification_email = ?, calendar_enabled = ?, whatsapp_enabled = ?, whatsapp_number = ? WHERE id = 1`,
+        sql: `UPDATE user_settings SET email_enabled = ?, notification_email = ?, calendar_enabled = ?, whatsapp_enabled = ?, whatsapp_number = ? WHERE user_id = ?`,
         args: [
           email_enabled ? 1 : 0,
-          notification_email || '',
+          notification_email || user.email,
           calendar_enabled ? 1 : 0,
           whatsapp_enabled ? 1 : 0,
           whatsapp_number || '',
+          user.id,
         ],
       });
     }

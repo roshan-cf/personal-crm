@@ -1,21 +1,31 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 import type { Contact, ContactWithLastInteraction } from '@/types';
 
 export async function GET() {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await initDatabase();
     const db = getDb();
 
-    const contactsResult = await db.execute(`
-      SELECT 
-        c.*,
-        i.interacted_at as last_interaction
-      FROM contacts c
-      LEFT JOIN interactions i ON c.id = i.contact_id
-      GROUP BY c.id
-      ORDER BY c.name ASC
-    `);
+    const contactsResult = await db.execute({
+      sql: `
+        SELECT 
+          c.*,
+          i.interacted_at as last_interaction
+        FROM contacts c
+        LEFT JOIN interactions i ON c.id = i.contact_id
+        WHERE c.user_id = ?
+        GROUP BY c.id
+        ORDER BY c.name ASC
+      `,
+      args: [user.id],
+    });
 
     const contacts: ContactWithLastInteraction[] = contactsResult.rows.map((row) => {
       const contact = row as unknown as Contact & { last_interaction: string | null };
@@ -58,6 +68,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await initDatabase();
     const db = getDb();
     const body = await request.json();
@@ -69,8 +84,8 @@ export async function POST(request: Request) {
     }
 
     const result = await db.execute({
-      sql: `INSERT INTO contacts (name, relation, remarks, frequency, frequency_day, category) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [name, relation, remarks || null, frequency || 'weekly', frequency_day ?? null, category || 'friends'],
+      sql: `INSERT INTO contacts (user_id, name, relation, remarks, frequency, frequency_day, category) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [user.id, name, relation, remarks || null, frequency || 'weekly', frequency_day ?? null, category || 'friends'],
     });
 
     const contactId = Number(result.lastInsertRowid);

@@ -3,6 +3,62 @@ import type { ContactWithLastInteraction } from '@/types';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+export async function sendOtpEmail(
+  email: string,
+  otpCode: string
+): Promise<{ success: boolean; error?: string }> {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; background: #f4f4f5;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px; padding: 32px; margin-bottom: 24px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Personal CRM</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 16px;">Your verification code</p>
+        </div>
+        
+        <div style="background: white; border-radius: 16px; padding: 48px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
+          <p style="color: #374151; font-size: 16px; margin: 0 0 24px 0;">
+            Enter this code to sign in:
+          </p>
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: inline-block; padding: 20px 48px; border-radius: 12px;">
+            <span style="font-size: 36px; font-weight: 700; color: white; letter-spacing: 8px;">${otpCode}</span>
+          </div>
+          <p style="color: #9ca3af; font-size: 14px; margin: 24px 0 0 0;">
+            This code expires in 5 minutes.
+          </p>
+        </div>
+        
+        <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 32px;">
+          If you didn't request this code, you can safely ignore this email.
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await resend.emails.send({
+      from: 'Personal CRM <onboarding@resend.dev>',
+      to: email,
+      subject: `Your verification code: ${otpCode}`,
+      html,
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending OTP email:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
 export async function sendDailyReminder(
   email: string,
   dueContacts: ContactWithLastInteraction[]

@@ -1,18 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await initDatabase();
     const db = getDb();
     const { id } = await params;
 
     const result = await db.execute({
-      sql: `SELECT * FROM contacts WHERE id = ?`,
-      args: [Number(id)],
+      sql: `SELECT * FROM contacts WHERE id = ? AND user_id = ?`,
+      args: [Number(id), user.id],
     });
 
     if (result.rows.length === 0) {
@@ -31,6 +37,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await initDatabase();
     const db = getDb();
     const { id } = await params;
@@ -43,8 +54,8 @@ export async function PUT(
     }
 
     await db.execute({
-      sql: `UPDATE contacts SET name = ?, relation = ?, remarks = ?, frequency = ?, frequency_day = ?, category = ?, updated_at = datetime('now') WHERE id = ?`,
-      args: [name, relation, remarks || null, frequency || 'weekly', frequency_day ?? null, category || 'friends', Number(id)],
+      sql: `UPDATE contacts SET name = ?, relation = ?, remarks = ?, frequency = ?, frequency_day = ?, category = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`,
+      args: [name, relation, remarks || null, frequency || 'weekly', frequency_day ?? null, category || 'friends', Number(id), user.id],
     });
 
     const updatedContact = await db.execute({
@@ -64,18 +75,23 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await initDatabase();
     const db = getDb();
     const { id } = await params;
 
     await db.execute({
-      sql: `DELETE FROM interactions WHERE contact_id = ?`,
-      args: [Number(id)],
+      sql: `DELETE FROM interactions WHERE contact_id = ? AND user_id = ?`,
+      args: [Number(id), user.id],
     });
 
     await db.execute({
-      sql: `DELETE FROM contacts WHERE id = ?`,
-      args: [Number(id)],
+      sql: `DELETE FROM contacts WHERE id = ? AND user_id = ?`,
+      args: [Number(id), user.id],
     });
 
     return NextResponse.json({ success: true });

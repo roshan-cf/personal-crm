@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
 import { sendDailyReminder } from '@/lib/email';
-import { sendWhatsAppReminder } from '@/lib/whatsapp';
-import type { Contact, ContactWithLastInteraction } from '@/types';
+import type { Contact, ContactWithLastInteraction, User, UserSettings } from '@/types';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET || 'personal-crm-cron';
+  const isManual = new URL(request.url).searchParams.get('manual') === 'true';
   
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!isManual && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -16,72 +16,83 @@ export async function GET(request: Request) {
     await initDatabase();
     const db = getDb();
 
-    const contactsResult = await db.execute(`
-      SELECT 
-        c.*,
-        i.interacted_at as last_interaction
-      FROM contacts c
-      LEFT JOIN interactions i ON c.id = i.contact_id
-      GROUP BY c.id
+    // Get all users with their settings
+    const usersResult = await db.execute(`
+      SELECT u.*, us.email_enabled, us.notification_email, us.whatsapp_enabled, us.whatsapp_number
+      FROM users u
+      LEFT JOIN user_settings us ON u.id = us.user_id
     `);
 
-    const dueContacts: ContactWithLastInteraction[] = [];
+    let totalEmailsSent = 0;
+    let totalDueContacts = 0;
 
-    for (const row of contactsResult.rows) {
-      const contact = row as unknown as Contact & { last_interaction: string | null };
-      const lastInteraction = contact.last_interaction;
+    for (const userRow of usersResult.rows) {
+      const user = userRow as unknown as User & UserSettings;
       
-      let daysSinceInteraction: number | null = null;
+      // Get contacts for this user
+      const contactsResult = await db.execute({
+        sql: `
+          SELECT 
+            c.*,
+            i.interacted_at as last_interaction
+          FROM contacts c
+          LEFT JOIN interactions i ON c.id = i.contact_id AND i.user_id = ?
+          WHERE c.user_id = ?
+          GROUP BY c.id
+        `,
+        args: [user.id, user.id],
+      });
 
-      if (lastInteraction) {
-        const lastDate = new Date(lastInteraction);
-        const now = new Date();
-        daysSinceInteraction = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+      const dueContacts: ContactWithLastInteraction[] = [];
+
+      for (const row of contactsResult.rows) {
+        const contact = row as unknown as Contact & { last_interaction: string | null };
+        const lastInteraction = contact.last_interaction;
+        
+        let daysSinceInteraction: number | null = null;
+
+        if (lastInteraction) {
+          const lastDate = new Date(lastInteraction);
+          const now = new Date();
+          daysSinceInteraction = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        const frequencyDays: Record<string, number> = {
+          daily: 1,
+          weekly: 7,
+          monthly: 30,
+          yearly: 365,
+        };
+
+        const threshold = frequencyDays[contact.frequency] || 7;
+        const isDue = daysSinceInteraction === null || daysSinceInteraction >= threshold;
+
+        if (isDue) {
+          dueContacts.push({
+            ...contact,
+            last_interaction: lastInteraction,
+            days_since_interaction: daysSinceInteraction,
+            is_due: true,
+          });
+        }
       }
 
-      const frequencyDays: Record<string, number> = {
-        daily: 1,
-        weekly: 7,
-        monthly: 30,
-        yearly: 365,
-      };
+      totalDueContacts += dueContacts.length;
 
-      const threshold = frequencyDays[contact.frequency] || 7;
-      const isDue = daysSinceInteraction === null || daysSinceInteraction >= threshold;
-
-      if (isDue) {
-        dueContacts.push({
-          ...contact,
-          last_interaction: lastInteraction,
-          days_since_interaction: daysSinceInteraction,
-          is_due: true,
-        });
-      }
-    }
-
-    const notificationEmail = process.env.NOTIFICATION_EMAIL;
-    const whatsappNumber = process.env.WHATSAPP_NUMBER;
-    
-    let emailSent = false;
-    let whatsappSent = false;
-
-    if (dueContacts.length > 0) {
-      if (notificationEmail) {
-        const result = await sendDailyReminder(notificationEmail, dueContacts);
-        emailSent = result.success;
-      }
-
-      if (whatsappNumber) {
-        const result = await sendWhatsAppReminder(whatsappNumber, dueContacts);
-        whatsappSent = result.success;
+      if (dueContacts.length > 0 && user.email_enabled !== false) {
+        const emailTo = user.notification_email || user.email;
+        const result = await sendDailyReminder(emailTo, dueContacts);
+        if (result.success) {
+          totalEmailsSent++;
+        }
       }
     }
 
     return NextResponse.json({ 
       success: true, 
-      dueContacts: dueContacts.length,
-      emailSent,
-      whatsappSent
+      usersProcessed: usersResult.rows.length,
+      totalDueContacts,
+      emailsSent: totalEmailsSent,
     });
   } catch (error) {
     console.error('Error in cron job:', error);
