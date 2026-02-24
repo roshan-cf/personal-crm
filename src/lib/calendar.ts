@@ -1,56 +1,69 @@
 import { google } from 'googleapis';
+import { getDb, initDatabase } from './db';
 
-const getOAuth2Client = () => {
+async function getOAuth2ClientForUser(userId: string) {
+  await initDatabase();
+  const db = getDb();
+
+  const result = await db.execute({
+    sql: `SELECT google_refresh_token FROM user_settings WHERE user_id = ?`,
+    args: [userId],
+  });
+
+  const refreshToken = result.rows[0]?.google_refresh_token as string | undefined;
+
+  if (!refreshToken) {
+    return null;
+  }
+
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
-  if (!clientId || !clientSecret || !refreshToken) {
+  if (!clientId || !clientSecret) {
     return null;
   }
 
   const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
   oauth2Client.setCredentials({ refresh_token: refreshToken });
   return oauth2Client;
-};
+}
 
-export async function createCalendarEvent(
+export async function createCalendarEventForUser(
+  userId: string,
   contactName: string,
-  frequency: string
+  relation: string
 ): Promise<{ success: boolean; eventId?: string; error?: string }> {
-  const auth = getOAuth2Client();
+  const auth = await getOAuth2ClientForUser(userId);
   
   if (!auth) {
-    return { success: false, error: 'Google Calendar not configured' };
+    return { success: false, error: 'Google Calendar not connected' };
   }
 
   const calendar = google.calendar({ version: 'v3', auth });
 
-  const frequencyDays: Record<string, number> = {
-    daily: 1,
-    weekly: 7,
-    monthly: 30,
-    yearly: 365,
-  };
-
-  const days = frequencyDays[frequency] || 7;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0);
 
   try {
     const event = await calendar.events.insert({
       calendarId: 'primary',
       requestBody: {
-        summary: `Reach out to ${contactName}`,
-        description: `Time to connect with ${contactName} (${frequency} check-in)`,
+        summary: `📞 Call ${contactName}`,
+        description: `Reach out to ${contactName} (${relation})\n\nLogged from Personal CRM`,
         start: {
-          date: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          dateTime: today.toISOString(),
+          timeZone: 'Asia/Kolkata',
         },
         end: {
-          date: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          dateTime: endOfToday.toISOString(),
+          timeZone: 'Asia/Kolkata',
         },
         reminders: {
           useDefault: false,
           overrides: [
-            { method: 'popup', minutes: 9 * 60 },
+            { method: 'popup', minutes: 0 },
+            { method: 'email', minutes: 30 },
           ],
         },
       },
@@ -66,23 +79,21 @@ export async function createCalendarEvent(
   }
 }
 
-export function getGoogleAuthUrl(): string | null {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  
-  if (!clientId || !clientSecret) {
-    return null;
+export async function createCalendarEventsForDueContacts(
+  userId: string,
+  contacts: Array<{ name: string; relation: string }>
+): Promise<{ success: number; failed: number }> {
+  let success = 0;
+  let failed = 0;
+
+  for (const contact of contacts) {
+    const result = await createCalendarEventForUser(userId, contact.name, contact.relation);
+    if (result.success) {
+      success++;
+    } else {
+      failed++;
+    }
   }
 
-  const oauth2Client = new google.auth.OAuth2(
-    clientId,
-    clientSecret,
-    `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/calendar/callback`
-  );
-
-  return oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/calendar.events'],
-    prompt: 'consent',
-  });
+  return { success, failed };
 }

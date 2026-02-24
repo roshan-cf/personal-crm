@@ -43,4 +43,6 @@ export interface UserSettings {
   calendar_enabled: boolean;
   whatsapp_enabled: boolean;
   whatsapp_number: string | null;
+  google_refresh_token: string | null;
+  google_calendar_id: string | null;
 }

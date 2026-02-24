@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
 import { sendDailyReminder } from '@/lib/email';
+import { createCalendarEventsForDueContacts } from '@/lib/calendar';
 import type { Contact, ContactWithLastInteraction, User, UserSettings } from '@/types';
 
 export async function GET(request: Request) {
@@ -18,12 +19,13 @@ export async function GET(request: Request) {
 
     // Get all users with their settings
     const usersResult = await db.execute(`
-      SELECT u.*, us.email_enabled, us.notification_email, us.whatsapp_enabled, us.whatsapp_number
+      SELECT u.*, us.email_enabled, us.notification_email, us.calendar_enabled, us.google_refresh_token, us.whatsapp_enabled, us.whatsapp_number
       FROM users u
       LEFT JOIN user_settings us ON u.id = us.user_id
     `);
 
     let totalEmailsSent = 0;
+    let totalCalendarEvents = 0;
     let totalDueContacts = 0;
 
     for (const userRow of usersResult.rows) {
@@ -79,12 +81,22 @@ export async function GET(request: Request) {
 
       totalDueContacts += dueContacts.length;
 
-      if (dueContacts.length > 0 && user.email_enabled !== false) {
+      if (dueContacts.length === 0) continue;
+
+      // Send email notification
+      if (user.email_enabled !== false) {
         const emailTo = user.notification_email || user.email;
         const result = await sendDailyReminder(emailTo, dueContacts);
         if (result.success) {
           totalEmailsSent++;
         }
+      }
+
+      // Create calendar events
+      if (user.calendar_enabled && user.google_refresh_token) {
+        const contactNames = dueContacts.map(c => ({ name: c.name, relation: c.relation }));
+        const result = await createCalendarEventsForDueContacts(user.id, contactNames);
+        totalCalendarEvents += result.success;
       }
     }
 
@@ -93,6 +105,7 @@ export async function GET(request: Request) {
       usersProcessed: usersResult.rows.length,
       totalDueContacts,
       emailsSent: totalEmailsSent,
+      calendarEventsCreated: totalCalendarEvents,
     });
   } catch (error) {
     console.error('Error in cron job:', error);

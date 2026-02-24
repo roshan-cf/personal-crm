@@ -64,9 +64,24 @@ export async function initDatabase(): Promise<void> {
       calendar_enabled INTEGER DEFAULT 0,
       whatsapp_enabled INTEGER DEFAULT 0,
       whatsapp_number TEXT,
+      google_refresh_token TEXT,
+      google_calendar_id TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  // Migrations: Add new columns to user_settings
+  try {
+    await db.execute(`ALTER TABLE user_settings ADD COLUMN google_refresh_token TEXT`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    await db.execute(`ALTER TABLE user_settings ADD COLUMN google_calendar_id TEXT`);
+  } catch {
+    // Column already exists
+  }
 
   // Migrations: Add user_id to existing tables if they don't have it
   try {
