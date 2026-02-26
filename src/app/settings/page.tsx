@@ -200,15 +200,28 @@ export default function SettingsPage() {
                 Connect
               </button>
             ) : (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.calendar_enabled}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, calendar_enabled: e.target.checked }))}
-                  className="w-4 h-4 rounded"
-                />
-                <span className="text-sm text-zinc-700 dark:text-zinc-300">Enabled</span>
-              </label>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.calendar_enabled}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, calendar_enabled: e.target.checked }))}
+                    className="w-4 h-4 rounded"
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">Enabled</span>
+                </label>
+                <button
+                  onClick={async () => {
+                    if (confirm('Disconnect Google? You can reconnect to refresh permissions.')) {
+                      await fetch('/api/auth/google/disconnect', { method: 'POST' });
+                      window.location.reload();
+                    }
+                  }}
+                  className="text-xs text-red-600 hover:underline"
+                >
+                  Disconnect
+                </button>
+              </div>
             )}
           </div>
           {settings.google_connected && settings.calendar_enabled && (
