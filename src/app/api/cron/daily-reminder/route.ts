@@ -5,19 +5,6 @@ import { createTasksForDueContacts } from '@/lib/calendar';
 import { sendBulkWhatsAppMessages } from '@/lib/whatsapp';
 import type { Contact, ContactWithLastInteraction, User, UserSettings } from '@/types';
 
-function getCurrentISTHour(): number {
-  const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const istTime = new Date(now.getTime() + istOffset);
-  return istTime.getHours();
-}
-
-function parseScheduleTime(timeStr: string | null): number | null {
-  if (!timeStr) return null;
-  const [hours] = timeStr.split(':').map(Number);
-  return hours;
-}
-
 async function getDueContactsForUser(db: any, userId: string): Promise<ContactWithLastInteraction[]> {
   const contactsResult = await db.execute({
     sql: `
@@ -86,12 +73,11 @@ export async function GET(request: Request) {
     const db = getDb();
 
     const usersResult = await db.execute(`
-      SELECT u.*, us.email_enabled, us.notification_email, us.email_schedule_time, us.calendar_enabled, us.calendar_schedule_time, us.google_refresh_token, us.whatsapp_enabled, us.whatsapp_number, us.whatsapp_schedule_time
+      SELECT u.*, us.email_enabled, us.notification_email, us.calendar_enabled, us.google_refresh_token, us.whatsapp_enabled, us.whatsapp_number
       FROM users u
       LEFT JOIN user_settings us ON u.id = us.user_id
     `);
 
-    const currentISTHour = getCurrentISTHour();
     let totalEmailsSent = 0;
     let totalTasksCreated = 0;
     let totalWhatsAppSent = 0;
@@ -107,21 +93,17 @@ export async function GET(request: Request) {
 
       if (dueContacts.length === 0) continue;
 
-      const emailHour = parseScheduleTime(user.email_schedule_time);
-      const calendarHour = parseScheduleTime(user.calendar_schedule_time);
-      const whatsappHour = parseScheduleTime(user.whatsapp_schedule_time);
-
       const shouldSendEmail = isManual 
         ? channel === 'email' || !channel
-        : user.email_enabled !== false && emailHour === currentISTHour;
+        : user.email_enabled !== false;
 
       const shouldCreateTasks = isManual
         ? channel === 'calendar' || !channel
-        : user.calendar_enabled && calendarHour === currentISTHour;
+        : user.calendar_enabled;
 
       const shouldSendWhatsApp = isManual
         ? channel === 'whatsapp' || !channel
-        : user.whatsapp_enabled && whatsappHour === currentISTHour;
+        : user.whatsapp_enabled;
 
       results[user.email] = {
         email: shouldSendEmail ? 'pending' : 'skipped',
@@ -150,8 +132,8 @@ export async function GET(request: Request) {
 
       if (shouldSendWhatsApp) {
         const contactsWithPhone = dueContacts
-          .filter(c => c.phone)
-          .map(c => ({ name: c.name, phone: c.phone! }));
+          .filter((c: ContactWithLastInteraction) => c.phone)
+          .map((c: ContactWithLastInteraction) => ({ name: c.name, phone: c.phone! }));
         
         if (contactsWithPhone.length > 0) {
           const result = await sendBulkWhatsAppMessages(contactsWithPhone);
@@ -165,7 +147,6 @@ export async function GET(request: Request) {
       success: true, 
       isManual,
       channel: channel || 'all',
-      currentISTHour,
       usersProcessed: usersResult.rows.length,
       totalDueContacts,
       emailsSent: totalEmailsSent,
