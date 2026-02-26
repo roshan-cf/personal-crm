@@ -28,50 +28,36 @@ async function getOAuth2ClientForUser(userId: string) {
   return oauth2Client;
 }
 
-export async function createCalendarEventForUser(
+export async function createTaskForUser(
   userId: string,
   contactName: string,
   relation: string
-): Promise<{ success: boolean; eventId?: string; error?: string }> {
+): Promise<{ success: boolean; taskId?: string; error?: string }> {
   const auth = await getOAuth2ClientForUser(userId);
   
   if (!auth) {
-    return { success: false, error: 'Google Calendar not connected' };
+    return { success: false, error: 'Google Tasks not connected' };
   }
 
-  const calendar = google.calendar({ version: 'v3', auth });
+  const tasks = google.tasks({ version: 'v1', auth });
 
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
-  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0);
+  const dueDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
+  dueDate.setDate(dueDate.getDate() + 1);
 
   try {
-    const event = await calendar.events.insert({
-      calendarId: 'primary',
+    const task = await tasks.tasks.insert({
+      tasklist: '@default',
       requestBody: {
-        summary: `📞 Call ${contactName}`,
-        description: `Reach out to ${contactName} (${relation})\n\nLogged from Personal CRM`,
-        start: {
-          dateTime: today.toISOString(),
-          timeZone: 'Asia/Kolkata',
-        },
-        end: {
-          dateTime: endOfToday.toISOString(),
-          timeZone: 'Asia/Kolkata',
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 0 },
-            { method: 'email', minutes: 30 },
-          ],
-        },
+        title: `📞 Call ${contactName}`,
+        notes: `Reach out to ${contactName} (${relation})\n\nLogged from Personal CRM`,
+        due: dueDate.toISOString(),
       },
     });
 
-    return { success: true, eventId: event.data.id || undefined };
+    return { success: true, taskId: task.data.id || undefined };
   } catch (error) {
-    console.error('Error creating calendar event:', error);
+    console.error('Error creating task:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
@@ -79,7 +65,7 @@ export async function createCalendarEventForUser(
   }
 }
 
-export async function createCalendarEventsForDueContacts(
+export async function createTasksForDueContacts(
   userId: string,
   contacts: Array<{ name: string; relation: string }>
 ): Promise<{ success: number; failed: number }> {
@@ -87,7 +73,7 @@ export async function createCalendarEventsForDueContacts(
   let failed = 0;
 
   for (const contact of contacts) {
-    const result = await createCalendarEventForUser(userId, contact.name, contact.relation);
+    const result = await createTaskForUser(userId, contact.name, contact.relation);
     if (result.success) {
       success++;
     } else {

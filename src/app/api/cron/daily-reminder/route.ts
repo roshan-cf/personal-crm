@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
 import { sendDailyReminder } from '@/lib/email';
-import { createCalendarEventsForDueContacts } from '@/lib/calendar';
+import { createTasksForDueContacts } from '@/lib/calendar';
 import { sendBulkWhatsAppMessages } from '@/lib/whatsapp';
 import type { Contact, ContactWithLastInteraction, User, UserSettings } from '@/types';
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     `);
 
     let totalEmailsSent = 0;
-    let totalCalendarEvents = 0;
+    let totalTasksCreated = 0;
     let totalWhatsAppSent = 0;
     let totalDueContacts = 0;
 
@@ -94,11 +94,11 @@ export async function GET(request: Request) {
         }
       }
 
-      // Create calendar events
+      // Create tasks
       if (user.calendar_enabled && user.google_refresh_token) {
         const contactNames = dueContacts.map(c => ({ name: c.name, relation: c.relation }));
-        const result = await createCalendarEventsForDueContacts(user.id, contactNames);
-        totalCalendarEvents += result.success;
+        const result = await createTasksForDueContacts(user.id, contactNames);
+        totalTasksCreated += result.success;
       }
 
       // Send WhatsApp notifications
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
       usersProcessed: usersResult.rows.length,
       totalDueContacts,
       emailsSent: totalEmailsSent,
-      calendarEventsCreated: totalCalendarEvents,
+      tasksCreated: totalTasksCreated,
       whatsappSent: totalWhatsAppSent,
     });
   } catch (error) {
