@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb, initDatabase } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 import { sendDailyReminder } from '@/lib/email';
 import { createTasksForDueContacts } from '@/lib/calendar';
 import { sendBulkWhatsAppMessages } from '@/lib/whatsapp';
@@ -72,11 +73,29 @@ export async function GET(request: Request) {
     await initDatabase();
     const db = getDb();
 
-    const usersResult = await db.execute(`
-      SELECT u.*, us.email_enabled, us.notification_email, us.calendar_enabled, us.google_refresh_token, us.whatsapp_enabled, us.whatsapp_number
-      FROM users u
-      LEFT JOIN user_settings us ON u.id = us.user_id
-    `);
+    let usersResult: any;
+    
+    if (isManual) {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      
+      const userSettingsResult = await db.execute({
+        sql: `SELECT u.*, us.email_enabled, us.notification_email, us.calendar_enabled, us.google_refresh_token, us.whatsapp_enabled, us.whatsapp_number
+              FROM users u
+              LEFT JOIN user_settings us ON u.id = us.user_id
+              WHERE u.id = ?`,
+        args: [currentUser.id],
+      });
+      usersResult = { rows: userSettingsResult.rows };
+    } else {
+      usersResult = await db.execute(`
+        SELECT u.*, us.email_enabled, us.notification_email, us.calendar_enabled, us.google_refresh_token, us.whatsapp_enabled, us.whatsapp_number
+        FROM users u
+        LEFT JOIN user_settings us ON u.id = us.user_id
+      `);
+    }
 
     let totalEmailsSent = 0;
     let totalTasksCreated = 0;
