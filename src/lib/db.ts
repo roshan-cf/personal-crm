@@ -120,4 +120,23 @@ export async function initDatabase(): Promise<void> {
   } catch {
     // Column already exists
   }
+
+  // Add schedule time columns for channels
+  try {
+    await db.execute(`ALTER TABLE user_settings ADD COLUMN email_schedule_time TEXT DEFAULT '09:00'`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    await db.execute(`ALTER TABLE user_settings ADD COLUMN calendar_schedule_time TEXT DEFAULT '09:00'`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    await db.execute(`ALTER TABLE user_settings ADD COLUMN whatsapp_schedule_time TEXT DEFAULT '09:00'`);
+  } catch {
+    // Column already exists
+  }
 }

@@ -21,9 +21,12 @@ export async function GET() {
       return NextResponse.json({
         email_enabled: true,
         notification_email: user.email,
+        email_schedule_time: '09:00',
         calendar_enabled: false,
+        calendar_schedule_time: '09:00',
         whatsapp_enabled: false,
         whatsapp_number: '',
+        whatsapp_schedule_time: '09:00',
       });
     }
 
@@ -48,9 +51,12 @@ export async function POST(request: Request) {
     const {
       email_enabled,
       notification_email,
+      email_schedule_time,
       calendar_enabled,
+      calendar_schedule_time,
       whatsapp_enabled,
       whatsapp_number,
+      whatsapp_schedule_time,
     } = body;
 
     const existing = await db.execute({
@@ -60,25 +66,31 @@ export async function POST(request: Request) {
 
     if (existing.rows.length === 0) {
       await db.execute({
-        sql: `INSERT INTO user_settings (user_id, email_enabled, notification_email, calendar_enabled, whatsapp_enabled, whatsapp_number) VALUES (?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO user_settings (user_id, email_enabled, notification_email, email_schedule_time, calendar_enabled, calendar_schedule_time, whatsapp_enabled, whatsapp_number, whatsapp_schedule_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           user.id,
           email_enabled ? 1 : 0,
           notification_email || user.email,
+          email_schedule_time || '09:00',
           calendar_enabled ? 1 : 0,
+          calendar_schedule_time || '09:00',
           whatsapp_enabled ? 1 : 0,
           whatsapp_number || '',
+          whatsapp_schedule_time || '09:00',
         ],
       });
     } else {
       await db.execute({
-        sql: `UPDATE user_settings SET email_enabled = ?, notification_email = ?, calendar_enabled = ?, whatsapp_enabled = ?, whatsapp_number = ? WHERE user_id = ?`,
+        sql: `UPDATE user_settings SET email_enabled = ?, notification_email = ?, email_schedule_time = ?, calendar_enabled = ?, calendar_schedule_time = ?, whatsapp_enabled = ?, whatsapp_number = ?, whatsapp_schedule_time = ? WHERE user_id = ?`,
         args: [
           email_enabled ? 1 : 0,
           notification_email || user.email,
+          email_schedule_time || '09:00',
           calendar_enabled ? 1 : 0,
+          calendar_schedule_time || '09:00',
           whatsapp_enabled ? 1 : 0,
           whatsapp_number || '',
+          whatsapp_schedule_time || '09:00',
           user.id,
         ],
       });

@@ -5,10 +5,77 @@ import { createTasksForDueContacts } from '@/lib/calendar';
 import { sendBulkWhatsAppMessages } from '@/lib/whatsapp';
 import type { Contact, ContactWithLastInteraction, User, UserSettings } from '@/types';
 
+function getCurrentISTHour(): number {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(now.getTime() + istOffset);
+  return istTime.getHours();
+}
+
+function parseScheduleTime(timeStr: string | null): number | null {
+  if (!timeStr) return null;
+  const [hours] = timeStr.split(':').map(Number);
+  return hours;
+}
+
+async function getDueContactsForUser(db: any, userId: string): Promise<ContactWithLastInteraction[]> {
+  const contactsResult = await db.execute({
+    sql: `
+      SELECT 
+        c.*,
+        i.interacted_at as last_interaction
+      FROM contacts c
+      LEFT JOIN interactions i ON c.id = i.contact_id AND i.user_id = ?
+      WHERE c.user_id = ?
+      GROUP BY c.id
+    `,
+    args: [userId, userId],
+  });
+
+  const dueContacts: ContactWithLastInteraction[] = [];
+
+  for (const row of contactsResult.rows) {
+    const contact = row as unknown as Contact & { last_interaction: string | null };
+    const lastInteraction = contact.last_interaction;
+    
+    let daysSinceInteraction: number | null = null;
+
+    if (lastInteraction) {
+      const lastDate = new Date(lastInteraction);
+      const now = new Date();
+      daysSinceInteraction = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    const frequencyDays: Record<string, number> = {
+      daily: 1,
+      weekly: 7,
+      monthly: 30,
+      yearly: 365,
+    };
+
+    const threshold = frequencyDays[contact.frequency] || 7;
+    const isDue = daysSinceInteraction === null || daysSinceInteraction >= threshold;
+
+    if (isDue) {
+      dueContacts.push({
+        ...contact,
+        last_interaction: lastInteraction,
+        days_since_interaction: daysSinceInteraction,
+        is_due: true,
+      });
+    }
+  }
+
+  return dueContacts;
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET || 'personal-crm-cron';
-  const isManual = new URL(request.url).searchParams.get('manual') === 'true';
+  const url = new URL(request.url);
+  
+  const isManual = url.searchParams.get('manual') === 'true';
+  const channel = url.searchParams.get('channel');
   
   if (!isManual && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,91 +85,70 @@ export async function GET(request: Request) {
     await initDatabase();
     const db = getDb();
 
-    // Get all users with their settings
     const usersResult = await db.execute(`
-      SELECT u.*, us.email_enabled, us.notification_email, us.calendar_enabled, us.google_refresh_token, us.whatsapp_enabled, us.whatsapp_number
+      SELECT u.*, us.email_enabled, us.notification_email, us.email_schedule_time, us.calendar_enabled, us.calendar_schedule_time, us.google_refresh_token, us.whatsapp_enabled, us.whatsapp_number, us.whatsapp_schedule_time
       FROM users u
       LEFT JOIN user_settings us ON u.id = us.user_id
     `);
 
+    const currentISTHour = getCurrentISTHour();
     let totalEmailsSent = 0;
     let totalTasksCreated = 0;
     let totalWhatsAppSent = 0;
     let totalDueContacts = 0;
+    const results: Record<string, any> = {};
 
     for (const userRow of usersResult.rows) {
       const user = userRow as unknown as User & UserSettings;
+      const userId = user.id;
       
-      // Get contacts for this user
-      const contactsResult = await db.execute({
-        sql: `
-          SELECT 
-            c.*,
-            i.interacted_at as last_interaction
-          FROM contacts c
-          LEFT JOIN interactions i ON c.id = i.contact_id AND i.user_id = ?
-          WHERE c.user_id = ?
-          GROUP BY c.id
-        `,
-        args: [user.id, user.id],
-      });
-
-      const dueContacts: ContactWithLastInteraction[] = [];
-
-      for (const row of contactsResult.rows) {
-        const contact = row as unknown as Contact & { last_interaction: string | null };
-        const lastInteraction = contact.last_interaction;
-        
-        let daysSinceInteraction: number | null = null;
-
-        if (lastInteraction) {
-          const lastDate = new Date(lastInteraction);
-          const now = new Date();
-          daysSinceInteraction = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-        }
-
-        const frequencyDays: Record<string, number> = {
-          daily: 1,
-          weekly: 7,
-          monthly: 30,
-          yearly: 365,
-        };
-
-        const threshold = frequencyDays[contact.frequency] || 7;
-        const isDue = daysSinceInteraction === null || daysSinceInteraction >= threshold;
-
-        if (isDue) {
-          dueContacts.push({
-            ...contact,
-            last_interaction: lastInteraction,
-            days_since_interaction: daysSinceInteraction,
-            is_due: true,
-          });
-        }
-      }
-
+      const dueContacts = await getDueContactsForUser(db, userId);
       totalDueContacts += dueContacts.length;
 
       if (dueContacts.length === 0) continue;
 
-      // Send email notification
-      if (user.email_enabled !== false) {
+      const emailHour = parseScheduleTime(user.email_schedule_time);
+      const calendarHour = parseScheduleTime(user.calendar_schedule_time);
+      const whatsappHour = parseScheduleTime(user.whatsapp_schedule_time);
+
+      const shouldSendEmail = isManual 
+        ? channel === 'email' || !channel
+        : user.email_enabled !== false && emailHour === currentISTHour;
+
+      const shouldCreateTasks = isManual
+        ? channel === 'calendar' || !channel
+        : user.calendar_enabled && calendarHour === currentISTHour;
+
+      const shouldSendWhatsApp = isManual
+        ? channel === 'whatsapp' || !channel
+        : user.whatsapp_enabled && whatsappHour === currentISTHour;
+
+      results[user.email] = {
+        email: shouldSendEmail ? 'pending' : 'skipped',
+        calendar: shouldCreateTasks ? 'pending' : 'skipped',
+        whatsapp: shouldSendWhatsApp ? 'pending' : 'skipped',
+        dueContacts: dueContacts.length,
+      };
+
+      if (shouldSendEmail) {
         const emailTo = user.notification_email || user.email;
         const result = await sendDailyReminder(emailTo, dueContacts);
         if (result.success) {
           totalEmailsSent++;
+          results[user.email].email = 'sent';
+        } else {
+          results[user.email].email = 'failed';
         }
       }
 
-      // Create tasks
-      if (user.calendar_enabled && user.google_refresh_token) {
+      if (shouldCreateTasks && user.google_refresh_token) {
         const contactNames = dueContacts.map(c => ({ name: c.name, relation: c.relation }));
         const result = await createTasksForDueContacts(user.id, contactNames);
         totalTasksCreated += result.success;
+        results[user.email].calendar = result.success > 0 ? 'created' : 'failed';
       }
 
-      // Send WhatsApp notifications
-      if (user.whatsapp_enabled) {
+      if (shouldSendWhatsApp) {
         const contactsWithPhone = dueContacts
           .filter(c => c.phone)
           .map(c => ({ name: c.name, phone: c.phone! }));
@@ -110,17 +156,22 @@ export async function GET(request: Request) {
         if (contactsWithPhone.length > 0) {
           const result = await sendBulkWhatsAppMessages(contactsWithPhone);
           totalWhatsAppSent += result.sent;
+          results[user.email].whatsapp = result.sent > 0 ? 'sent' : 'failed';
         }
       }
     }
 
     return NextResponse.json({ 
       success: true, 
+      isManual,
+      channel: channel || 'all',
+      currentISTHour,
       usersProcessed: usersResult.rows.length,
       totalDueContacts,
       emailsSent: totalEmailsSent,
       tasksCreated: totalTasksCreated,
       whatsappSent: totalWhatsAppSent,
+      results,
     });
   } catch (error) {
     console.error('Error in cron job:', error);

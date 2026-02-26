@@ -41,9 +41,12 @@ export interface UserSettings {
   user_id: string;
   email_enabled: boolean;
   notification_email: string | null;
+  email_schedule_time: string;
   calendar_enabled: boolean;
+  calendar_schedule_time: string;
   whatsapp_enabled: boolean;
   whatsapp_number: string | null;
+  whatsapp_schedule_time: string;
   google_refresh_token: string | null;
   google_calendar_id: string | null;
 }
