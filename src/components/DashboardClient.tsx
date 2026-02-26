@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ContactWithLastInteraction } from '@/types';
 
 const getCategoryColor = (cat: string) => {
@@ -36,6 +36,10 @@ export function DashboardClient() {
       return res.json();
     },
   });
+
+  useEffect(() => {
+    fetch('/api/sync/tasks', { method: 'POST' }).catch(console.error);
+  }, []);
 
   const logMutation = useMutation({
     mutationFn: async (contactId: number) => {

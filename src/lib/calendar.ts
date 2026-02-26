@@ -31,7 +31,8 @@ async function getOAuth2ClientForUser(userId: string) {
 export async function createTaskForUser(
   userId: string,
   contactName: string,
-  relation: string
+  relation: string,
+  contactId?: number
 ): Promise<{ success: boolean; taskId?: string; error?: string }> {
   const auth = await getOAuth2ClientForUser(userId);
   
@@ -55,7 +56,17 @@ export async function createTaskForUser(
       },
     });
 
-    return { success: true, taskId: task.data.id || undefined };
+    const taskId = task.data.id;
+
+    if (taskId && contactId) {
+      const db = getDb();
+      await db.execute({
+        sql: `INSERT INTO interactions (user_id, contact_id, interacted_at, google_task_id) VALUES (?, ?, ?, ?)`,
+        args: [userId, contactId, now.toISOString(), taskId],
+      });
+    }
+
+    return { success: true, taskId: taskId || undefined };
   } catch (error) {
     console.error('Error creating task:', error);
     return { 
@@ -67,13 +78,13 @@ export async function createTaskForUser(
 
 export async function createTasksForDueContacts(
   userId: string,
-  contacts: Array<{ name: string; relation: string }>
+  contacts: Array<{ name: string; relation: string; contactId?: number }>
 ): Promise<{ success: number; failed: number }> {
   let success = 0;
   let failed = 0;
 
   for (const contact of contacts) {
-    const result = await createTaskForUser(userId, contact.name, contact.relation);
+    const result = await createTaskForUser(userId, contact.name, contact.relation, contact.contactId);
     if (result.success) {
       success++;
     } else {
@@ -82,4 +93,50 @@ export async function createTasksForDueContacts(
   }
 
   return { success, failed };
+}
+
+export async function syncCompletedTasks(userId: string): Promise<{ synced: number }> {
+  const auth = await getOAuth2ClientForUser(userId);
+  
+  if (!auth) {
+    return { synced: 0 };
+  }
+
+  const db = getDb();
+  
+  const pendingTasks = await db.execute({
+    sql: `SELECT id, contact_id, google_task_id FROM interactions WHERE user_id = ? AND google_task_id IS NOT NULL`,
+    args: [userId],
+  });
+
+  if (pendingTasks.rows.length === 0) {
+    return { synced: 0 };
+  }
+
+  const tasks = google.tasks({ version: 'v1', auth });
+  let synced = 0;
+
+  for (const row of pendingTasks.rows) {
+    const interactionId = row.id as number;
+    const taskId = row.google_task_id as string;
+
+    try {
+      const task = await tasks.tasks.get({
+        tasklist: '@default',
+        task: taskId,
+      });
+
+      if (task.data.status === 'completed') {
+        synced++;
+        await db.execute({
+          sql: `DELETE FROM interactions WHERE id = ?`,
+          args: [interactionId],
+        });
+      }
+    } catch (error) {
+      console.error('Error checking task status:', error);
+    }
+  }
+
+  return { synced };
 }

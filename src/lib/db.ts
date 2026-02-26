@@ -139,4 +139,11 @@ export async function initDatabase(): Promise<void> {
   } catch {
     // Column already exists
   }
+
+  // Add google_task_id to track created tasks
+  try {
+    await db.execute(`ALTER TABLE interactions ADD COLUMN google_task_id TEXT`);
+  } catch {
+    // Column already exists
+  }
 }

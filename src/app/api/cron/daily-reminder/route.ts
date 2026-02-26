@@ -143,7 +143,7 @@ export async function GET(request: Request) {
       }
 
       if (shouldCreateTasks && user.google_refresh_token) {
-        const contactNames = dueContacts.map(c => ({ name: c.name, relation: c.relation }));
+        const contactNames = dueContacts.map(c => ({ name: c.name, relation: c.relation, contactId: c.id }));
         const result = await createTasksForDueContacts(user.id, contactNames);
         totalTasksCreated += result.success;
         results[user.email].calendar = result.success > 0 ? 'created' : 'failed';
