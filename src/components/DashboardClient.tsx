@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import type { ContactWithLastInteraction } from '@/types';
 
 const getCategoryColor = (cat: string) => {
@@ -135,12 +136,12 @@ export function DashboardClient() {
             {dueContacts.length} contact{dueContacts.length !== 1 ? 's' : ''} to reach out to
           </p>
         </div>
-        <a
+        <Link
           href="/contacts/new"
           className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
         >
           + Add Contact
-        </a>
+        </Link>
       </div>
 
       {error && (
@@ -252,12 +253,12 @@ export function DashboardClient() {
       {contacts.length === 0 && (
         <div className="text-center py-16">
           <p className="text-zinc-500 dark:text-zinc-400 mb-4">No contacts yet. Add your first contact to get started.</p>
-          <a
+          <Link
             href="/contacts/new"
             className="inline-block px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
           >
             Add Your First Contact
-          </a>
+          </Link>
         </div>
       )}
     </div>
