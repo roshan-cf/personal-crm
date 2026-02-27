@@ -3,6 +3,8 @@ import { getDb, initDatabase } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import type { Contact, ContactWithLastInteraction } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
